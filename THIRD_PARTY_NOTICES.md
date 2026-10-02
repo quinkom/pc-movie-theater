@@ -8,6 +8,7 @@ PC Movie Theater's own code is MIT-licensed (see `LICENSE`). It uses and redistr
 | [ModernZ](https://github.com/Samillion/ModernZ) — on-screen player controls (`vendor/player/scripts/modernz.lua`, `modernz-icons.ttf`) | LGPL-2.1 | Included with a custom config (`script-opts/modernz.conf`). Full license text: `vendor/player/LICENSE-ModernZ.txt`. |
 | [Electron](https://www.electronjs.org) | MIT | Application runtime (includes Chromium and its licenses — see the `LICENSES.chromium.html` shipped with the app). |
 | [electron-updater](https://www.electron.build/auto-update) / electron-builder | MIT | Auto-update and installer build. |
+| [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) | MIT | Draws the QR codes in the support window. |
 | [Creepster](https://fonts.google.com/specimen/Creepster) (Sam Parrett) and [Limelight](https://fonts.google.com/specimen/Limelight) (Eben Sorkin) fonts | SIL Open Font License 1.1 | Used for the Halloween and Movie Theater themes. |
 
 ## Data sources

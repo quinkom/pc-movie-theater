@@ -30,7 +30,7 @@
 1. Go to the **[Releases](https://github.com/quinkom/pc-movie-theater/releases/latest)** page and download **`PC-Movie-Theater-Setup-x.y.z.exe`**.
 2. Run it. It installs just for you (no admin rights needed) and adds a desktop shortcut.
    - Windows may show a blue **"Windows protected your PC"** screen because the app isn't code-signed yet (code-signing certificates cost money and this is a free hobby project). Click **More info → Run anyway**. The full source is right here if you'd like to check it or build it yourself.
-3. Launch **PC Movie Theater**, then **Settings → Library** and choose the folder with your videos (default: `Videos\movies`).
+3. Launch **PC Movie Theater**. A quick first-run setup asks where your movies live and where downloads should be saved. You can add **several folders** (for example an external drive) — if a drive is unplugged its titles stay on the shelf, faded, until it's back. Change any of it later in **Settings → Library**.
 
 Requires Windows 10/11 (64-bit).
 
@@ -89,6 +89,15 @@ Making your own theme: copy `themes/classic` to `%APPDATA%\PC Movie Theater\them
 ## A note on downloads
 
 The **Get Movies** screen is a search front-end for the Internet Archive, which hosts a huge amount of public-domain and freely shared film. Some uploads there may still be under copyright. **You are responsible for only downloading content you have the right to.** The built-in filter hides adult material and junk by default.
+
+## Support the project
+
+PC Movie Theater is free and always will be. If it's given you some good movie nights, an optional tip helps keep the updates coming:
+
+- **Venmo:** [@quin-k](https://venmo.com/u/quin-k)
+- **PayPal:** [donate](https://www.paypal.com/donate/?business=komquinton%40gmail.com&no_recurring=0&item_name=PC+Movie+Theater&currency_code=USD)
+
+(In the app, click **♥ Support** in the bottom bar. The welcome window can be turned off in **Settings → About**.) Starring the repo and sharing it helps just as much. ⭐
 
 ## License & credits
 

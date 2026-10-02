@@ -29,7 +29,8 @@ const mpvPath = () => MPV_CANDIDATES.find(p => fs.existsSync(p));
 
 // ---------- persistence ----------
 const defaultSettings = () => ({
-  moviesPath: path.join(os.homedir(), 'Videos', 'movies'),
+  moviesPath: path.join(os.homedir(), 'Videos', 'movies'),   // legacy (1.0.0): migrated into libraryPaths
+  libraryPaths: [], downloadPath: '', legacyRoot: '', setupDone: false,
   theme: 'auto',
   layout: 'flow',          // flow | wall
   sort: 'title',           // title | added | year | recent
@@ -47,7 +48,7 @@ const defaultSettings = () => ({
   mouseScroll: true,
   decor: true,
   binds: {},
-  autoUpdate: true, skipVersion: '',
+  autoUpdate: true, skipVersion: '', showWelcome: true,
   audioDevice: 'auto', audioDevice2: '', audioDelay: 0, audioDelay2: 0, volumeMax: '130', nightMode: false, downmix: false, audioLang: 'en,eng,jpn',
   playerWin: null,
   autoMeta: true,
@@ -56,7 +57,14 @@ const defaultSettings = () => ({
 const readJson = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return d; } };
 const writeJson = (f, o) => { const t = f + '.tmp'; fs.writeFileSync(t, JSON.stringify(o, null, 1)); fs.renameSync(t, f); };
 
-let settings = { ...defaultSettings(), ...readJson(SETTINGS_FILE, {}) };
+const rawSettings = readJson(SETTINGS_FILE, null);
+let settings = { ...defaultSettings(), ...(rawSettings || {}) };
+if (rawSettings) {   // existing install (e.g. upgraded from 1.0.0): keep their folder and skip the first-run setup
+  if (!Array.isArray(settings.libraryPaths) || !settings.libraryPaths.length) settings.libraryPaths = settings.moviesPath ? [settings.moviesPath] : [];
+  if (!settings.legacyRoot) settings.legacyRoot = settings.moviesPath || settings.libraryPaths[0] || '';
+  if (!settings.downloadPath) settings.downloadPath = settings.libraryPaths[0] || '';
+  if (rawSettings.setupDone === undefined) settings.setupDone = true;
+}
 let db = readJson(DB_FILE, { items: {} });
 const saveSettings = () => writeJson(SETTINGS_FILE, settings);
 const saveDb = () => writeJson(DB_FILE, db);
@@ -99,13 +107,22 @@ function walk(dir, depth, out) {
   }
 }
 
+const libRoots = () => [...new Set((settings.libraryPaths || []).filter(Boolean).map(p => path.resolve(p)))];
+const rootOnline = r => { try { return fs.statSync(r).isDirectory(); } catch { return false; } };
+const inside = (child, parent) => { const c = path.resolve(child).toLowerCase(), p = path.resolve(parent).toLowerCase(); return c === p || c.startsWith(p + path.sep); };
+// folder that used to be the only library keeps the old ids (so favorites/resume survive the upgrade); extra folders get their own id space
+const movieId = (root, file) => 'm_' + hashId(settings.legacyRoot && path.resolve(settings.legacyRoot).toLowerCase() === root.toLowerCase() ? path.relative(root, file) : root.toLowerCase() + '|' + path.relative(root, file));
+
 function scanLibrary() {
-  const root = settings.moviesPath;
-  const files = [];
-  if (fs.existsSync(root)) walk(root, 0, files);
+  const roots = libRoots(), online = roots.filter(rootOnline), offline = new Set(roots.filter(r => !rootOnline(r)).map(r => r.toLowerCase()));
+  const files = [], seen = new Set();
+  for (const root of online) {
+    const part = []; walk(root, 0, part);
+    for (const f of part) { const k = f.path.toLowerCase(); if (seen.has(k)) continue; seen.add(k); f.root = root; files.push(f); }
+  }
   const found = new Map();
   for (const f of files) {
-    const rel = path.relative(root, f.path);
+    const rel = path.relative(f.root, f.path);
     const parts = rel.split(path.sep);
     const base = path.basename(f.path, path.extname(f.path));
     const ep = parseEpisode(base) || (parts.length > 2 && /^season\s*\d+/i.test(parts[parts.length - 2]) ? (() => {
@@ -119,14 +136,14 @@ function scanLibrary() {
       const id = 's_' + hashId(title);
       let it = found.get(id);
       if (!it) found.set(id, it = { id, type: 'show', title, year, episodes: [], size: 0, added: 0 });
-      it.episodes.push({ path: f.path, season: ep.season, episode: ep.episode, size: f.size });
+      it.episodes.push({ path: f.path, season: ep.season, episode: ep.episode, size: f.size, root: f.root });
       it.added = Math.max(it.added, f.birth); it.size += f.size;
     } else {
       let nameSrc = base;
       if (parts.length > 1 && (/^(movie|video|film|main|title)\d*$/i.test(base) || parts.length === 2 && /(^|\W)(cd|disc|part)\s*\d/i.test(base))) nameSrc = parts[0];
       const { title, year } = cleanTitle(nameSrc);
-      const id = 'm_' + hashId(path.relative(root, f.path));
-      found.set(id, { id, type: 'movie', title, year, path: f.path, size: f.size, added: f.birth });
+      const id = movieId(f.root, f.path);
+      found.set(id, { id, type: 'movie', title, year, path: f.path, size: f.size, added: f.birth, root: f.root });
     }
   }
   const items = [];
@@ -135,13 +152,14 @@ function scanLibrary() {
     // user edits win over parsed values
     rec.type = f.type;
     if (!rec.edited) { rec.title = rec.title && rec.titleFromMeta ? rec.title : f.title; if (f.year && !rec.year) rec.year = f.year; }
-    if (f.type === 'movie') { rec.path = f.path; } else {
-      f.episodes.sort((a, b) => a.season - b.season || a.episode - b.episode);
-      rec.episodes = f.episodes;
+    if (f.type === 'movie') { rec.path = f.path; rec.root = f.root; } else {
+      // keep episodes that live on a drive that isn't plugged in right now
+      const away = (rec.episodes || []).filter(e => e.root && offline.has(e.root.toLowerCase()) && !f.episodes.some(x => x.path === e.path)).map(e => ({ ...e, offline: true }));
+      rec.episodes = f.episodes.concat(away).sort((a, b) => a.season - b.season || a.episode - b.episode);
     }
     rec.added = f.added;
     rec.size = f.size;
-    rec.virtual = false;
+    rec.virtual = false; rec.offline = false;
     items.push(rec);
   }
   // a file that matches a not-downloaded entry (same title/year) fills it in, keeping its cover and info
@@ -150,7 +168,16 @@ function scanLibrary() {
     const g = ghosts.find(v => !v.merged && v.type === rec.type && norm(v.title) === norm(rec.title) && (!v.year || !rec.year || v.year === rec.year));
     if (g) { mergeGhost(rec, g); delete db.items[g.id]; g.merged = true; }
   }
-  for (const id of Object.keys(db.items)) if (!found.has(id) && !db.items[id].virtual) delete db.items[id];
+  for (const id of Object.keys(db.items)) {
+    const rec = db.items[id]; if (found.has(id) || rec.virtual) continue;
+    const onAway = e => e.root && offline.has(e.root.toLowerCase());
+    const away = rec.type === 'movie' ? onAway(rec) : (rec.episodes || []).some(onAway);
+    if (away) {   // its drive is unplugged: keep the title on the shelf (faded) until the drive comes back
+      rec.offline = true;
+      if (rec.type === 'show') rec.episodes = rec.episodes.filter(onAway).map(e => ({ ...e, offline: true }));
+      items.push(rec);
+    } else delete db.items[id];
+  }
   for (const r of Object.values(db.items)) if (r.virtual) items.push(r);
   saveDb();
   return items.map(publicItem);
@@ -353,10 +380,12 @@ const downloads = new Map();
 async function iaDownload(sender, id, fileName, title) {
   if (downloads.has(id)) throw new Error('already downloading');
   const ctrl = new AbortController(); downloads.set(id, ctrl);
-  fs.mkdirSync(settings.moviesPath, { recursive: true });
+  const dlDir = path.resolve(settings.downloadPath || libRoots()[0] || path.join(os.homedir(), 'Videos', 'PC Movie Theater'));
+  try { fs.mkdirSync(dlDir, { recursive: true }); } catch { downloads.delete(id); throw new Error("The download folder isn't available — plug in the drive or choose another folder in Settings → Library."); }
+  if (!libRoots().some(r => inside(dlDir, r))) { settings.libraryPaths = [...(settings.libraryPaths || []), dlDir]; saveSettings(); }   // make sure new downloads appear on the shelf
   const safe = s => s.replace(/[<>:"/\\|?*\x00-\x1f]/g, '').replace(/\s+/g, ' ').trim();
   const ext = path.extname(fileName);
-  const dest = path.join(settings.moviesPath, `${safe(title) || id}${ext}`);
+  const dest = path.join(dlDir, `${safe(title) || id}${ext}`);
   const part = dest + '.part';
   const send = o => { try { sender.send('ia:progress', { id, ...o }); } catch {} };
   try {
@@ -522,10 +551,12 @@ function play(item, startFile, startPos) {
   if (playing) return;
   const rec = db.items[item.id];
   if (!rec || rec.virtual) throw new Error('This one is not downloaded yet');
+  if (rec.offline) throw new Error('Plug in the drive this movie is on, then try again');
   let list;
   if (rec.type === 'movie') list = [rec.path];
   else {
-    const eps = rec.episodes.map(e => e.path);
+    const eps = rec.episodes.filter(e => !e.offline).map(e => e.path);
+    if (!eps.length) throw new Error('Plug in the drive these episodes are on, then try again');
     const i = Math.max(0, eps.indexOf(startFile || eps[0]));
     list = settings.autoplayNext ? eps.slice(i) : [eps[i]];
   }
@@ -731,10 +762,10 @@ app.whenReady().then(() => {
     saveDb(); return publicItem(rec);
   });
   h('library:renameFiles', (_, dry) => {
-    const root = settings.moviesPath, plan = [];
+    const plan = [];
     const safe = t => t.replace(/[<>:"\/\|?*\x00-\x1f]/g, '').replace(/\s+/g, ' ').replace(/[. ]+$/, '').trim();
     for (const rec of Object.values(db.items)) {
-      if (rec.type !== 'movie' || !rec.path || !(rec.titleFromMeta || rec.edited)) continue;
+      if (rec.type !== 'movie' || !rec.path || rec.offline || !(rec.titleFromMeta || rec.edited)) continue;
       const dir = path.dirname(rec.path), ext = path.extname(rec.path), want = safe(rec.title + (rec.year ? ` (${rec.year})` : '')) + ext;
       if (!want || path.basename(rec.path) === want || fs.existsSync(path.join(dir, want))) continue;
       plan.push({ id: rec.id, from: rec.path, to: path.join(dir, want) });
@@ -746,7 +777,7 @@ app.whenReady().then(() => {
         const oldBase = path.basename(p.from, path.extname(p.from)), newBase = path.basename(p.to, path.extname(p.to)), dir = path.dirname(p.from);
         fs.renameSync(p.from, p.to);
         for (const f of fs.readdirSync(dir)) if (f.startsWith(oldBase + '.') && /\.(srt|ass|ssa|sub|idx|vtt|sup)$/i.test(f)) { try { fs.renameSync(path.join(dir, f), path.join(dir, newBase + f.slice(oldBase.length))); } catch {} }
-        const rec = db.items[p.id], nid = 'm_' + hashId(path.relative(root, p.to));
+        const rec = db.items[p.id], nid = movieId(rec.root || libRoots().find(r => inside(p.to, r)) || path.dirname(p.to), p.to);
         db.items[nid] = { ...rec, id: nid, path: p.to }; delete db.items[p.id];
         if (rec.cover) { try { const ext = path.extname(rec.cover), nc = nid + ext; fs.renameSync(path.join(COVERS, rec.cover), path.join(COVERS, nc)); db.items[nid].cover = nc; } catch {} }
         n++;
@@ -766,9 +797,9 @@ app.whenReady().then(() => {
   });
   h('library:delete', async (_, id, permanent) => {
     const rec = db.items[id]; if (!rec || rec.virtual) throw new Error('Nothing to delete');
-    const root = path.resolve(settings.moviesPath).toLowerCase() + path.sep;
-    const files = rec.type === 'movie' ? [rec.path] : rec.episodes.map(e => e.path);
-    for (const f of files) if (!path.resolve(f).toLowerCase().startsWith(root)) throw new Error('Refusing to delete a file outside your movies folder');
+    if (rec.offline) throw new Error('Plug in the drive first so the file can be deleted');
+    const files = rec.type === 'movie' ? [rec.path] : rec.episodes.filter(e => !e.offline).map(e => e.path);
+    for (const f of files) if (!libRoots().some(r => inside(f, r))) throw new Error('Refusing to delete a file outside your library folders');
     let freed = 0;
     for (const f of files) {
       let st; try { st = fs.statSync(f); } catch { continue; }
@@ -831,6 +862,14 @@ app.whenReady().then(() => {
     spawn(exe, ['--no-config', '--no-terminal', '--no-video', '--force-window=no', '--really-quiet', ...(dev && dev !== 'auto' ? [`--audio-device=${dev}`] : []), '--volume=30', 'av://lavfi:sine=frequency=660:duration=0.8'], { stdio: 'ignore', windowsHide: true });
   });
   h('app:version', () => app.getVersion());
+  h('paths:status', () => libRoots().map(p => ({ path: p, exists: rootOnline(p) })));
+  h('paths:suggest', () => {
+    const v = path.join(os.homedir(), 'Videos');
+    const existing = ['movies', 'Movies', 'Films', 'TV', 'Shows'].map(n => path.join(v, n)).filter(rootOnline);
+    return { videos: v, existing, fresh: path.join(v, 'PC Movie Theater') };
+  });
+  h('paths:ensure', (_, p) => { fs.mkdirSync(p, { recursive: true }); return true; });
+  h('qr:svg', (_, text) => { const q = require('qrcode-generator')(0, 'M'); q.addData(String(text).slice(0, 400)); q.make(); return q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); });
   h('update:check', () => { checkForUpdates(true); });
   h('update:download', () => autoUpdater && autoUpdater.downloadUpdate());
   h('update:install', () => { if (autoUpdater) autoUpdater.quitAndInstall(true, true); });

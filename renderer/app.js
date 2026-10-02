@@ -15,6 +15,7 @@ const fmtTime = s => { s = Math.floor(s); const h = Math.floor(s / 3600), m = Ma
 const fmtSize = b => b > 1e9 ? (b / 1e9).toFixed(2) + ' GB' : (b / 1e6).toFixed(0) + ' MB';
 const stripHtml = s => (s || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+const np = p => String(p || '').replace(/[\\/]+/g, '\\').replace(/\\$/, '').toLowerCase();   // compare Windows paths loosely
 
 const S = {
   settings: {}, items: [], view: [], idx: 0, tab: 'all', f: { genres: [], decades: [], minRating: 0, unwatched: false, status: 'all' }, q: '', themes: [], theme: null,
@@ -288,6 +289,7 @@ function makeArt(it) {
 function makeBox(it) {
   const front = el('div', { class: 'face front' }, makeArt(it), el('div', { class: 'gloss' }));
   if (it.virtual) front.append(el('span', { class: 'badge cloud', text: '☁ NOT DOWNLOADED' }));
+  else if (it.offline) front.append(el('span', { class: 'badge cloud', text: '💾 DRIVE NOT CONNECTED' }));
   else if (Date.now() - it.added < 14 * 864e5) front.append(el('span', { class: 'badge new', text: 'NEW' }));
   if (it.type === 'show') front.append(el('span', { class: 'badge tv', text: seasonsOf(it).length + ' S' }));
   if (isWatched(it)) front.append(el('span', { class: 'badge seen', text: '✓' }));
@@ -295,7 +297,7 @@ function makeBox(it) {
   if (it.resume && it.resume.dur) front.append(el('div', { class: 'prog' }, el('i', { style: `width:${Math.min(100, it.resume.pos / it.resume.dur * 100)}%` })));
   const spine = el('div', { class: 'face side sideL' }, el('div', { class: 'spine' }, el('b', { text: it.title }), it.year ? el('i', { text: it.year }) : null));
   const cube = el('div', { class: 'cube' }, front, el('div', { class: 'face back' }), spine, el('div', { class: 'face side sideR' }), el('div', { class: 'face cap capT' }), el('div', { class: 'face cap capB' }));
-  return el('div', { class: 'box' + (it.virtual ? ' ghost' : ''), 'data-id': it.id }, el('div', { class: 'glow' }), cube, el('div', { class: 'reflect' }, makeArt(it)));
+  return el('div', { class: 'box' + (it.virtual || it.offline ? ' ghost' : ''), 'data-id': it.id }, el('div', { class: 'glow' }), cube, el('div', { class: 'reflect' }, makeArt(it)));
 }
 const boxes = new Map();
 function place(b, d) {
@@ -344,7 +346,7 @@ function clearBoxes() { for (const b of boxes.values()) b.remove(); boxes.clear(
 function updatePlaque() {
   const it = cur(), N = S.view.length;
   $('#plTitle').textContent = it ? it.title + (it.year ? ` (${it.year})` : '') : '—';
-  $('#plSub').textContent = it ? `${S.idx + 1} of ${N}` + (it.type === 'show' ? ` · ${seasonsOf(it).length} season${seasonsOf(it).length === 1 ? '' : 's'}, ${it.episodes.length} episodes` : '') + (it.genres && it.genres.length ? ' · ' + it.genres.slice(0, 3).join(', ') : '') + (it.virtual ? ' · ☁ not downloaded' : '') + (it.fav ? ' · ♥ favorite' : '') : '0 of 0';
+  $('#plSub').textContent = it ? `${S.idx + 1} of ${N}` + (it.type === 'show' ? ` · ${seasonsOf(it).length} season${seasonsOf(it).length === 1 ? '' : 's'}, ${it.episodes.length} episodes` : '') + (it.genres && it.genres.length ? ' · ' + it.genres.slice(0, 3).join(', ') : '') + (it.virtual ? ' · ☁ not downloaded' : it.offline ? ' · 💾 drive not connected' : '') + (it.fav ? ' · ♥ favorite' : '') : '0 of 0';
 }
 function update() { renderFlow(); if (S.settings.layout === 'wall') renderWall(false); updatePlaque(); }
 function renderAll(rebuild = true) {
@@ -353,7 +355,7 @@ function renderAll(rebuild = true) {
   const emp = $('#empty'); emp.hidden = !none;
   if (none) {
     emp.textContent = '';
-    if (!S.items.length) emp.append(el('div', { class: 'big', text: 'The shelf is empty…' }), el('div', { text: `No videos found in ${S.settings.moviesPath}` }),
+    if (!S.items.length) emp.append(el('div', { class: 'big', text: 'The shelf is empty…' }), el('div', { text: `No videos found in ${(S.settings.libraryPaths || []).join(', ') || 'your library folders'}` }),
       el('div', { class: 'btns' }, el('button', { class: 'btn primary', 'data-nav': '', text: 'Choose movies folder', onclick: openSettings }), el('button', { class: 'btn', 'data-nav': '', text: 'Get movies from Archive.org', onclick: openArchive })));
     else emp.append(el('div', { class: 'big', text: 'Nothing here…' }), el('div', { text: 'No titles match this filter or search.' }),
       el('button', { class: 'btn', 'data-nav': '', text: 'Show everything', onclick: () => resetFilters(false) }));
@@ -463,13 +465,15 @@ function openDetails(it0) {
     cb.addEventListener('drop', async e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (!f) return; const p = api.pathForFile(f); const r = await guard(() => api.coverFromFile(it.id, p)); if (r) { refreshItem(r); toast('Cover updated'); render(); } });
     cb.title = 'Tip: drag an image file here to set the cover';
     main.append(el('h1', { text: it.title }));
-    const meta = [it.year, it.type === 'show' ? `${seasonsOf(it).length} season(s) · ${it.episodes.length} episodes` : it.virtual ? '☁ Not downloaded' : fmtSize(it.size), it.rating ? '★ ' + it.rating : null].filter(Boolean).join('  ·  ');
+    const meta = [it.year, it.type === 'show' ? `${seasonsOf(it).length} season(s) · ${it.episodes.length} episodes` : it.virtual ? '☁ Not downloaded' : it.offline ? '💾 Drive not connected' : fmtSize(it.size), it.rating ? '★ ' + it.rating : null].filter(Boolean).join('  ·  ');
     main.append(el('div', { class: 'muted', text: meta }));
     main.append(el('div', { class: 'chips' }, ...(it.genres || []).map(g => el('button', { class: 'chip', text: g, 'data-nav': '', onclick: () => { closeModal(m); S.tab = 'all'; S.f.genres = [g]; S.idx = 0; commit(); } }))));
     main.append(el('p', { class: 'ov', text: stripHtml(it.overview) || 'No description yet. Use “Edit info” or “Change cover” (which can also fetch the details).' }));
     const btns = el('div', { class: 'btns' });
     if (it.virtual) {
       btns.append(el('button', { class: 'btn primary', 'data-autofocus': '', text: it.source ? '⬇ Download' : '🔎 Find a download', onclick: () => openGhostDownload(it) }));
+    } else if (it.offline) {
+      btns.append(el('button', { class: 'btn primary', 'data-autofocus': '', text: '↻ Check the drive again', onclick: async () => { await loadLibrary(it.id); const n = S.items.find(x => x.id === it.id); if (n && !n.offline) { toast('Drive found!'); render(); } else toast('💾 Still not connected — plug it in and try again'); } }));
     } else if (it.type === 'movie') {
       if (it.resume) btns.append(el('button', { class: 'btn primary', 'data-autofocus': '', text: `▶ Resume ${fmtTime(it.resume.pos)}`, onclick: () => startPlay(it, null, it.resume.pos) }), el('button', { class: 'btn', text: '↺ Start over', onclick: () => startPlay(it, null, 0) }));
       else btns.append(el('button', { class: 'btn primary', 'data-autofocus': '', text: '▶ Play', onclick: () => startPlay(it, null, 0) }));
@@ -483,7 +487,7 @@ function openDetails(it0) {
       it.virtual ? null : el('button', { class: 'btn', text: isWatched(it) ? '☐ Mark unwatched' : '☑ Mark watched', onclick: async () => { const r = await guard(() => api.markWatched(it.id, !isWatched(it))); if (r) { refreshItem(r); render(); } } }),
       it.virtual ? null : el('button', { class: 'btn', text: '📂 Show file', onclick: () => api.reveal(it.id) }),
       it.virtual ? el('button', { class: 'btn danger', text: '✕ Remove from shelf', onclick: async () => { if (!await confirmBox('Remove from shelf?', `“${it.title}” isn't downloaded, so nothing is deleted from your PC. It will just be taken off the shelf.`, 'Remove')) return; const ok = await guard(() => api.forget(it.id)); if (ok) { closeAll(); await loadLibrary(); toast('Removed from shelf'); } } })
-                 : el('button', { class: 'btn danger', text: '🗑 Delete from PC…', onclick: () => openDelete(it) }));
+                 : (it.offline ? null : el('button', { class: 'btn danger', text: '🗑 Delete from PC…', onclick: () => openDelete(it) })));
     main.append(btns);
     if (it.type === 'show' && !it.virtual) {
       const ss = seasonsOf(it); if (season == null) season = (nextEpisode(it) || {}).season ?? ss[0];
@@ -491,7 +495,7 @@ function openDetails(it0) {
       ss.forEach(s => tabs.append(el('button', { class: 'btn sm' + (s === season ? ' primary' : ''), 'data-nav': '', text: s === 0 ? 'Specials' : 'Season ' + s, onclick: () => { season = s; render(); } })));
       it.episodes.filter(e => e.season === season).forEach(e => {
         const w = it.watched && it.watched[e.path];
-        list.append(el('button', { class: 'ep', 'data-nav': '', onclick: () => startPlay(it, e.path, it.resume && it.resume.file === e.path ? it.resume.pos : 0) },
+        list.append(el('button', { class: 'ep' + (e.offline ? ' off' : ''), 'data-nav': '', onclick: () => e.offline ? toast('💾 Plug in the drive this episode is on') : startPlay(it, e.path, it.resume && it.resume.file === e.path ? it.resume.pos : 0) },
           el('span', { class: 'n', text: `E${String(e.episode).padStart(2, '0')}` }), el('span', { class: 't', text: epTitle(e.path, it) }), el('span', { class: 'w', text: w ? '✓' : (it.resume && it.resume.file === e.path ? fmtTime(it.resume.pos) : '') }),
           el('span', { class: 'btn sm', text: w ? 'Unwatch' : 'Watched', onclick: async ev => { ev.stopPropagation(); const r = await guard(() => api.markEpisode(it.id, e.path, !w)); if (r) { refreshItem(r); render(); } } })));
       });
@@ -509,6 +513,7 @@ function nextEpisode(it) {
 }
 function epTitle(p, it) { let n = p.split(/[\\/]/).pop().replace(/\.[^.]+$/, ''); n = n.replace(/[sS]\d{1,2}[ ._-]*[eE]\d{1,3}/, '').replace(/\b\d{1,2}x\d{2,3}\b/, '').replace(/[._]/g, ' ').replace(/\b(1080p|720p|480p|web-?dl|webrip|hdtv|x26[45]|bluray).*$/i, '').replace(new RegExp('^\\s*' + it.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), '').replace(/^[\s\-–]+|[\s\-–]+$/g, ''); return n || 'Episode'; }
 async function startPlay(it, file, pos) {
+  if (it.offline) { toast('💾 Plug in the drive this is on, then try again'); return; }
   if (it.virtual) { toast('☁ Not downloaded yet'); return openGhostDownload(it); }
   SFX.select(); const r = await guard(() => api.play(it.id, file, pos)); if (r === undefined && false) return;
 }
@@ -682,9 +687,92 @@ api.onProgress(p => {
   if (p.error) card.children[1].textContent = p.error;
 });
 
+/* ---- first-run setup: where are your movies, where should downloads go ---- */
+function openSetup() {
+  return new Promise(async resolve => {
+    const sug = await api.pathsSuggest().catch(() => ({ videos: '', existing: [], fresh: '' }));
+    const rerun = S.settings.setupDone !== false;
+    let libs = (S.settings.libraryPaths && S.settings.libraryPaths.length) ? [...S.settings.libraryPaths] : (sug.existing.length ? [sug.existing[0]] : []), dl = S.settings.downloadPath || null, m;
+    const libList = el('div'), dlSel = el('select', { 'data-nav': '' });
+    const draw = () => {
+      libList.textContent = '';
+      libs.forEach(p => libList.append(el('div', { class: 'librow' }, el('span', { class: 'dot on' }), el('span', { class: 'lpath', text: p }), el('button', { class: 'btn sm danger', 'data-nav': '', text: 'Remove', onclick: () => { libs = libs.filter(x => x !== p); if (dl === p) dl = null; draw(); } }))));
+      if (!libs.length) libList.append(el('div', { class: 'muted small', style: 'padding:6px 2px', text: 'No folder chosen yet. If you don’t have any movies yet, that’s fine — just click “Finish setup” and we’ll make a “PC Movie Theater” folder in your Videos.' }));
+      dlSel.textContent = '';
+      for (const p of libs) dlSel.append(el('option', { value: p, text: p }));
+      if (!libs.some(p => np(p) === np(sug.fresh))) dlSel.append(el('option', { value: sug.fresh, text: `${sug.fresh}   (new folder)` }));
+      dlSel.append(el('option', { value: '__other', text: 'Choose another folder…' }));
+      dlSel.value = dl && [...dlSel.options].some(o => o.value === dl) ? dl : (libs[0] || sug.fresh); dl = dlSel.value;
+    };
+    dlSel.addEventListener('change', async () => {
+      if (dlSel.value === '__other') { const p = await api.pickFolder(); if (p) { if (!libs.some(x => np(x) === np(p))) libs.push(p); dl = p; } }
+      else dl = dlSel.value;
+      draw();
+    });
+    const finish = async () => {
+      const downloads = dl || libs[0] || sug.fresh, all = libs.slice();
+      if (!all.some(p => np(p) === np(downloads))) all.push(downloads);   // the download folder is always part of the library
+      try { for (const p of all) await api.pathsEnsure(p); } catch (e) { toast('⚠ Couldn’t use that folder: ' + e.message); return; }
+      Object.assign(S.settings, { libraryPaths: all, downloadPath: downloads, setupDone: true, legacyRoot: all[0] });
+      await api.setSettings({ libraryPaths: all, downloadPath: downloads, setupDone: true, legacyRoot: all[0] });
+      closeModal(m); await loadLibrary(); toast(rerun ? 'Library folders saved' : 'All set! 🍿'); SFX.jingle();
+    };
+    draw();
+    const body = el('div', { class: 'body about' },
+      el('p', { class: 'athanks', style: 'margin-top:0', text: 'Let’s set up your library — it takes about 20 seconds, and you can change everything later in Settings.' }),
+      el('div', { class: 'ftitle', style: 'margin-top:14px', text: '1 · Where are your movies & shows?' }),
+      libList,
+      el('div', { class: 'btns', style: 'margin-top:8px' }, el('button', { class: 'btn', 'data-nav': '', text: '＋ Add a folder…', onclick: async () => { const p = await api.pickFolder(); if (p && !libs.some(x => np(x) === np(p))) { libs.push(p); draw(); } } }),
+        el('span', { class: 'small muted', style: 'flex:1', text: 'Add more than one if you like — for example an external drive. Subfolders are scanned too.' })),
+      el('div', { class: 'ftitle', style: 'margin-top:18px', text: '2 · Where should new downloads be saved?' }),
+      dlSel,
+      el('div', { class: 'small muted', style: 'margin-top:6px', text: 'Used by “Get Movies” (Internet Archive). It’s added to your library automatically so downloads show up on the shelf.' }),
+      el('div', { class: 'afoot' }, el('span', { class: 'small muted', text: 'Plug-in drives are fine: titles on an unplugged drive stay on the shelf (faded) until it’s back.' }),
+        el('div', { class: 'row', style: 'gap:8px;flex:none' }, rerun ? el('button', { class: 'btn', 'data-nav': '', text: 'Cancel', onclick: () => closeModal(m) }) : null, el('button', { class: 'btn primary', 'data-autofocus': '', text: rerun ? 'Save' : 'Finish setup', onclick: finish }))));
+    m = openModal(el('div', {}, el('h2', {}, el('span', { text: 'Welcome to PC Movie Theater 🍿' })), body), { cls: 'mid', dismiss: false, onClose: () => resolve() });
+  });
+}
+
+const REPO = 'https://github.com/quinkom/pc-movie-theater';
+/* ---- About & support (version, donation call-to-action; can be turned off at startup) ---- */
+const DONATE = {
+  paypalEmail: 'komquinton@gmail.com',
+  paypalUrl: 'https://www.paypal.com/donate/?business=komquinton%40gmail.com&no_recurring=0&item_name=PC+Movie+Theater&currency_code=USD',
+  venmoUser: 'quin-k', venmoUrl: 'https://venmo.com/u/quin-k',
+};
+async function openAbout(opts = {}) {
+  return new Promise(async resolve => {
+    SFX.open(); let m;
+    const ver = await api.appVersion().catch(() => '');
+    const copy = t => { (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast(`Copied ${t}`), () => toast(t)); };
+    const card = async (name, color, handle, url) => {
+      const svg = await api.qrSvg(url).catch(() => '');
+      return el('div', { class: 'dcard', style: `--c:${color}` },
+        el('div', { class: 'dname', text: name }), el('div', { class: 'dhandle', text: handle }),
+        el('div', { class: 'qr', title: 'Scan with your phone', html: svg }),
+        el('div', { class: 'row', style: 'justify-content:center;gap:8px' },
+          el('button', { class: 'btn sm primary', 'data-nav': '', text: `Open ${name}`, onclick: () => api.openExternal(url) }),
+          el('button', { class: 'btn sm', 'data-nav': '', text: 'Copy', title: `Copy ${handle}`, onclick: () => copy(handle.replace(/^@/, name === 'Venmo' ? '@' : '')) })));
+    };
+    const [pay, ven] = [await card('PayPal', '#0a7bd6', DONATE.paypalEmail, DONATE.paypalUrl), await card('Venmo', '#3d95ce', '@' + DONATE.venmoUser, DONATE.venmoUrl)];
+    const chk = el('input', { type: 'checkbox', 'data-nav': '' }); chk.checked = S.settings.showWelcome !== false;
+    chk.addEventListener('change', () => { S.settings.showWelcome = chk.checked; api.setSettings({ showWelcome: chk.checked }); });
+    const link = (t, u) => el('button', { class: 'btn sm', 'data-nav': '', text: t, onclick: () => api.openExternal(u) });
+    const body = el('div', { class: 'body about' },
+      el('div', { class: 'ahead' }, el('img', { class: 'aicon', src: '../build/icon.png' }), el('div', {}, el('div', { class: 'atitle', text: 'PC Movie Theater' }), el('div', { class: 'asub', text: `Version ${ver || '—'}  ·  free & open source (MIT)` }))),
+      el('p', { class: 'athanks', html: 'Thanks for using PC Movie Theater! It’s <b>free and always will be</b> — made by one person who loves movie nights. If it’s helped you have a few good ones, a small tip helps keep the updates coming. Totally optional. 🍿' }),
+      el('div', { class: 'dgrid' }, pay, ven),
+      el('div', { class: 'row', style: 'gap:8px;flex-wrap:wrap' }, link('GitHub', REPO), link('Report a problem', REPO + '/issues'), link('Licenses & credits', REPO + '/blob/main/THIRD_PARTY_NOTICES.md'),
+        el('button', { class: 'btn sm', 'data-nav': '', text: '⟳ Check for updates', onclick: () => { toast('Checking for updates…'); S.settings.skipVersion = ''; api.setSettings({ skipVersion: '' }); api.updateCheck(); } })),
+      el('div', { class: 'afoot' },
+        el('label', { class: 'row small muted', style: 'gap:10px;cursor:pointer' }, el('span', { class: 'sw' }, chk, el('i')), 'Show this window when the app starts'),
+        el('button', { class: 'btn primary', 'data-autofocus': '', text: opts.startup ? 'Continue to the theater' : 'Close', onclick: () => closeModal(m) })));
+    m = openModal(el('div', {}, mkHead('', () => m), body), { cls: 'mid', onClose: () => resolve() });
+  });
+}
+
 /* ---- updates: asks first, never installs on its own ---- */
 let updM = null, updBar = null, updLabel = null;
-const REPO = 'https://github.com/quinkom/pc-movie-theater';
 function openUpdateAvailable(e) {
   if (updM) closeModal(updM);
   const notes = stripHtml(e.notes || '').slice(0, 700);
@@ -735,20 +823,46 @@ function openSettings() {
     api.audioDevices().then(list => { for (const d of list) e.append(el('option', { value: d.id, text: d.name })); e.value = s[k] ?? offValue; if (e.value !== (s[k] ?? offValue)) e.value = offValue; }).catch(() => {});
     return e;
   };
-  const folder = el('input', { type: 'text', value: s.moviesPath, 'data-nav': '' });
-  const setFolder = async v => { folder.value = v; await save('moviesPath', v); await loadLibrary(); toast('Folder updated'); };
-  folder.addEventListener('change', () => setFolder(folder.value.trim()));
+  const libBox = el('div', { class: 'libbox' }), dlBox = el('div');
+  const libs = () => s.libraryPaths || [];
+  const saveLib = async (arr, dl) => {
+    s.libraryPaths = arr; if (dl !== undefined) s.downloadPath = dl; if (!s.downloadPath) s.downloadPath = arr[0] || '';
+    await api.setSettings({ libraryPaths: s.libraryPaths, downloadPath: s.downloadPath, legacyRoot: s.legacyRoot || arr[0] || '' });
+    await loadLibrary(); drawLib();
+  };
+  async function drawLib() {
+    const st = await api.pathsStatus().catch(() => []), ok = p => { const x = st.find(y => np(y.path) === np(p)); return x ? x.exists : true; };
+    libBox.textContent = '';
+    for (const p of libs()) libBox.append(el('div', { class: 'librow' }, el('span', { class: 'dot ' + (ok(p) ? 'on' : 'off') }), el('span', { class: 'lpath', text: p }), el('span', { class: 'small muted', text: ok(p) ? 'connected' : 'not connected' }),
+      el('button', { class: 'btn sm danger', 'data-nav': '', text: 'Remove', onclick: async () => { if (!await confirmBox('Remove this folder?', `“${p}” will no longer be scanned. Your files are NOT deleted.`, 'Remove')) return; saveLib(libs().filter(x => x !== p)); } })));
+    if (!libs().length) libBox.append(el('div', { class: 'muted small', text: 'No folders yet — add one below.' }));
+    libBox.append(el('div', { class: 'btns', style: 'margin-top:8px' }, el('button', { class: 'btn', 'data-nav': '', text: '＋ Add a folder…', onclick: async () => { const p = await api.pickFolder(); if (p && !libs().some(x => np(x) === np(p))) saveLib([...libs(), p]); } }),
+      el('span', { class: 'small muted', style: 'flex:1', text: 'Add as many as you like — e.g. an external drive. If a drive is unplugged its titles stay on the shelf, faded, until it’s back.' })));
+    dlBox.textContent = '';
+    const cur_ = s.downloadPath || libs()[0] || '', dl = el('select', { 'data-nav': '' });
+    for (const p of libs()) dl.append(el('option', { value: p, text: p }));
+    if (cur_ && !libs().some(x => np(x) === np(cur_))) dl.prepend(el('option', { value: cur_, text: cur_ }));
+    dl.append(el('option', { value: '__other', text: 'Choose another folder…' }));
+    dl.value = cur_;
+    dl.addEventListener('change', async () => {
+      if (dl.value === '__other') { const p = await api.pickFolder(); if (!p) return drawLib(); await saveLib(libs().some(x => np(x) === np(p)) ? libs() : [...libs(), p], p); }
+      else { s.downloadPath = dl.value; await api.setSettings({ downloadPath: dl.value }); toast('New downloads will be saved to ' + dl.value); }
+    });
+    dlBox.append(dl);
+  }
+  drawLib();
   const vol = el('input', { type: 'range', min: 0, max: 1, step: .05, value: s.sfxVolume, 'data-nav': '' }); vol.addEventListener('input', async () => { await save('sfxVolume', +vol.value); }); vol.addEventListener('change', () => SFX.select());
   const themeOpts = [['auto', 'Automatic (by date)'], ...S.themes.map(t => [t.id, `${t.icon || ''} ${t.name}${t.season ? '' : ''}`])];
   const body = [
     el('div', { class: 'sec', text: 'Library' }),
-    row('Movies & shows folder', el('div', { class: 'row', style: 'flex-wrap:nowrap' }, folder, el('button', { class: 'btn sm', 'data-nav': '', text: 'Browse…', onclick: async () => { const p = await api.pickFolder(); if (p) setFolder(p); } })), 'Subfolders are scanned. Shows: use “Show Name/Season 1/S01E01 …” or “Show.S01E01.mkv”.'),
+    row('Library folders', libBox, 'Every folder here is scanned, subfolders too. Shows: “Show Name/Season 1/S01E01 …” or “Show.S01E01.mkv”.'),
+    row('Download new movies to', dlBox, 'Where Get Movies saves files. That folder is part of your library, so downloads appear on the shelf.'),
     row('Sort by', sel('sort', [['title', 'Title A–Z'], ['added', 'Recently added'], ['year', 'Year (newest)'], ['recent', 'Recently watched']], () => { applyFilter((cur() || {}).id); renderAll(true); })),
     row('Button hints', sel('hints', [['auto', 'Automatic (keyboard; Xbox when a controller is connected)'], ['keyboard', 'Always keyboard'], ['xbox', 'Always Xbox controller']], renderHints)),
     row('Mouse edge-scroll', sw('mouseScroll'), 'Carousel scrolls when the mouse is left or right of the selected box'),
     row('Layout', sel('layout', [['flow', 'Cover-flow shelf'], ['wall', 'Wall of boxes']], () => renderAll(true))),
     el('div', { class: 'small muted', style: 'margin-top:6px', text: (() => { const real = S.items.filter(i => !i.virtual), bytes = real.reduce((a, i) => a + (i.size || 0), 0), g = S.items.length - real.length; return `Storage: ${real.length} title(s) on this PC · ${fmtSize(bytes)} used` + (g ? ` · ${g} not downloaded` : ''); })() }),
-    el('div', { class: 'btns' }, el('button', { class: 'btn', 'data-nav': '', text: '↻ Rescan library', onclick: () => loadLibrary().then(() => toast('Library rescanned')) }), el('button', { class: 'btn', 'data-nav': '', text: '🖼 Find missing covers', onclick: () => { for (const i of S.items) { i.coverAsked = false; S.askedThisSession.delete(i.id); } closeModal(m); askMissingCovers(); } })),
+    el('div', { class: 'btns' }, el('button', { class: 'btn', 'data-nav': '', text: '↻ Rescan library', onclick: () => loadLibrary().then(() => toast('Library rescanned')) }), el('button', { class: 'btn', 'data-nav': '', text: '🧭 Run setup again…', onclick: () => { closeAll(); openSetup(); } }), el('button', { class: 'btn', 'data-nav': '', text: '🖼 Find missing covers', onclick: () => { for (const i of S.items) { i.coverAsked = false; S.askedThisSession.delete(i.id); } closeModal(m); askMissingCovers(); } })),
     el('div', { class: 'btns' }, el('button', { class: 'btn', 'data-nav': '', text: '✎ Rename files to match their titles…', onclick: async () => {
       const plan = await guard(() => api.renameFiles(true)); if (!plan) return;
       if (!plan.length) return toast('Every file already matches its title');
@@ -785,9 +899,11 @@ function openSettings() {
     controlsEditor(),
     el('div', { class: 'sec', text: 'About' }),
     row('Version', (() => { const v = el('span', { text: '…' }); api.appVersion().then(x => { v.textContent = 'v' + x; }); return v; })(), 'Free & open source (MIT).'),
+    row('Show the welcome window at startup', sw('showWelcome'), 'The About / support window. Turn this off and it only appears when you click ♥ Support.'),
     row('Check for updates on startup', sw('autoUpdate'), 'Looks for a new version when you launch while online, and asks before installing anything.'),
     el('div', { class: 'btns' },
       el('button', { class: 'btn', 'data-nav': '', text: '⟳ Check for updates now', onclick: () => { toast('Checking for updates…'); S.settings.skipVersion = ''; api.setSettings({ skipVersion: '' }); api.updateCheck(); } }),
+      el('button', { class: 'btn primary', 'data-nav': '', text: '♥ About & support', onclick: () => openAbout() }),
       el('button', { class: 'btn', 'data-nav': '', text: 'GitHub page', onclick: () => api.openExternal(REPO) }),
       el('button', { class: 'btn', 'data-nav': '', text: 'Report a problem', onclick: () => api.openExternal(REPO + '/issues') }),
       el('button', { class: 'btn', 'data-nav': '', text: 'Licenses & credits', onclick: () => api.openExternal(REPO + '/blob/main/THIRD_PARTY_NOTICES.md') })),
@@ -958,6 +1074,7 @@ function renderHints() {
       const k = firstKeyOf(id); if (k) add(k, 'k', label, fns[id]);
     }
   }
+  h.append(el('button', { class: 'hint support', title: 'About, version & support the project', onclick: () => openAbout() }, '♥ Support'));
   syncHintH();
 }
 
@@ -1093,5 +1210,9 @@ api.onChanged(n => refreshItem(n));
   await loadLibrary();
   gpLoop();
   if (S.settings.sfx && S.settings.ambience) { document.addEventListener('pointerdown', () => SFX.setAmbience(true), { once: true }); }
-  setTimeout(() => { askMissingCovers().then(() => autoCategorize(false)); }, 800);
+  if (S.settings.setupDone === false) await openSetup();
+  let rootsKey = '';
+  setInterval(async () => { const st = await api.pathsStatus().catch(() => null); if (!st) return; const k = st.map(x => x.path + x.exists).join('|'); if (rootsKey && k !== rootsKey && !S.playing) loadLibrary(); rootsKey = k; }, 8000);   // pick up drives being plugged in / pulled out
+  const welcome = S.settings.showWelcome !== false ? sleep(900).then(() => openAbout({ startup: true })) : sleep(800);
+  welcome.then(() => askMissingCovers()).then(() => autoCategorize(false));
 })();
