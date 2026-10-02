@@ -1,0 +1,10 @@
+node_modules/
+dist/
+release/
+vendor/mpv/
+vendor/*.7z
+*.log
+.DS_Store
+Thumbs.db
+build/icon-512.png.bak
+*.lnk

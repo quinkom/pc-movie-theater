@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' hs-cover: https: data: file:; style-src 'self' 'unsafe-inline'; font-src 'self' file: data:; media-src 'self'; connect-src 'self'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PC Movie Theater</title>
+<link rel="stylesheet" href="styles.css">
+<style id="theme-css"></style>
+</head>
+<body data-layout="flow">
+  <div id="bg"></div>
+  <div id="decor" aria-hidden="true"></div>
+  <div id="flash"></div>
+  <canvas id="fx"></canvas>
+
+  <header id="top">
+    <div id="logo"><span id="logoIcon">🎬</span><div id="brand"></div></div>
+    <div id="searchwrap"><span class="mag">🔍</span><input id="search" data-nav type="search" placeholder="Search titles, genres, years…" autocomplete="off" spellcheck="false"><kbd>/</kbd></div>
+    <div id="tools">
+      <button class="tool" id="btnLayout" data-nav title="Switch shelf / wall layout (L)">▦</button>
+      <button class="tool" id="btnRandom" data-nav title="Surprise me! (R)">🎲</button>
+      <button class="tool wide" id="btnArchive" data-nav title="Download free movies from Archive.org (M)">⬇ Get Movies</button>
+      <button class="tool" id="btnSettings" data-nav title="Settings (O)">⚙</button>
+    </div>
+  </header>
+
+  <nav id="filterbar">
+    <div id="tabs" class="seg"></div>
+    <div id="qchips"></div>
+    <div id="fright">
+      <button class="pill" id="btnGhost" data-nav title="Show or hide titles that aren't downloaded"></button>
+      <button class="pill accent" id="btnFilters" data-nav title="Filters (G)">☰ Filters<b id="fcount" hidden></b></button>
+      <span id="countLabel"></span>
+    </div>
+  </nav>
+
+  <main id="stage">
+    <div id="flow"></div>
+    <div id="wall"></div>
+    <div id="empty" hidden></div>
+  </main>
+
+  <section id="plaque"><div id="plTitle"></div><div id="plSub"></div></section>
+  <footer id="hints"></footer>
+
+  <div id="tray"></div>
+  <div id="toasts"></div>
+  <div id="modals"></div>
+  <div id="playing" hidden><div class="pbox"><div class="pico">🎬</div><div>Now playing…</div><small>Close the player to come back to your shelf</small></div></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

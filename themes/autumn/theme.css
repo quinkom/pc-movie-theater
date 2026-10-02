@@ -1,0 +1,20 @@
+:root {
+  --bg1: #1a0e06; --bg2: #5b2a0c; --accent: #f59e0b; --accent2: #b91c1c;
+  --text: #fff4e5; --muted: #d9b99b; --panel: rgba(34,16,6,.95); --panelLine: rgba(245,158,11,.4);
+  --case: #1f1209; --edge: #d97706; --glow: rgba(245,158,11,.5);
+  --band-bg: linear-gradient(#fde68a, #f59e0b); --band-fg: #451a03;
+  --floor1: rgba(217,119,6,.42); --hint-bg: rgba(255,240,215,.94); --hint-fg: #5a2d0a;
+  --plaque-bg: linear-gradient(#6b4a2f, #3a2515); --plaque-fg: #ffe9c7;
+  --font-display: 'Georgia', serif;
+}
+.catbtn, .modal > h2, .sec, .det h1, #brand, .ph .pt, #empty .big, .pbox { font-weight: 700; }
+
+/* ---- Autumn decor (static art + a gentle sway) ---- */
+.a-garland { position: absolute; left: 0; right: 0; top: 0; height: 40px; top: -12px; background: url("data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%22200%22%20height=%2254%22%20viewBox=%220%200%20200%2054%22%3E%3Cpath%20d=%22M0%204%20Q50%2030%20100%204%20Q150%2030%20200%204%22%20fill=%22none%22%20stroke=%22%235a3a1a%22%20stroke-width=%221.8%22/%3E%3Cline%20x1=%2225%22%20y1=%2213%22%20x2=%2225%22%20y2=%2221%22%20stroke=%22%235a3a1a%22%20stroke-width=%221.2%22/%3E%3Cg%20transform=%22translate%2825%2032%29%20rotate%28-12%29%20scale%281.05%29%22%3E%3Cpath%20d=%22M0%20-12%20L3%20-5%20L10%20-8%20L7%200%20L12%203%20L4%204%20L0%2012%20L-4%204%20L-12%203%20L-7%200%20L-10%20-8%20L-3%20-5%20Z%22%20fill=%22%23d9531e%22/%3E%3Cpath%20d=%22M0%20-3%20V12%22%20stroke=%22rgba%280%2C0%2C0%2C.28%29%22%20stroke-width=%221%22/%3E%3C/g%3E%3Cline%20x1=%2275%22%20y1=%2213%22%20x2=%2275%22%20y2=%2221%22%20stroke=%22%235a3a1a%22%20stroke-width=%221.2%22/%3E%3Cg%20transform=%22translate%2875%2032%29%20rotate%2810%29%20scale%281.05%29%22%3E%3Cpath%20d=%22M0%20-12%20L3%20-5%20L10%20-8%20L7%200%20L12%203%20L4%204%20L0%2012%20L-4%204%20L-12%203%20L-7%200%20L-10%20-8%20L-3%20-5%20Z%22%20fill=%22%23f2b134%22/%3E%3Cpath%20d=%22M0%20-3%20V12%22%20stroke=%22rgba%280%2C0%2C0%2C.28%29%22%20stroke-width=%221%22/%3E%3C/g%3E%3Ccircle%20cx=%2289%22%20cy=%2223%22%20r=%223.2%22%20fill=%22%23a2531f%22/%3E%3Cline%20x1=%22125%22%20y1=%2213%22%20x2=%22125%22%20y2=%2221%22%20stroke=%22%235a3a1a%22%20stroke-width=%221.2%22/%3E%3Cg%20transform=%22translate%28125%2032%29%20rotate%28-6%29%20scale%281.05%29%22%3E%3Cpath%20d=%22M0%20-12%20L3%20-5%20L10%20-8%20L7%200%20L12%203%20L4%204%20L0%2012%20L-4%204%20L-12%203%20L-7%200%20L-10%20-8%20L-3%20-5%20Z%22%20fill=%22%23b8431a%22/%3E%3Cpath%20d=%22M0%20-3%20V12%22%20stroke=%22rgba%280%2C0%2C0%2C.28%29%22%20stroke-width=%221%22/%3E%3C/g%3E%3Cline%20x1=%22175%22%20y1=%2213%22%20x2=%22175%22%20y2=%2221%22%20stroke=%22%235a3a1a%22%20stroke-width=%221.2%22/%3E%3Cg%20transform=%22translate%28175%2032%29%20rotate%2814%29%20scale%281.05%29%22%3E%3Cpath%20d=%22M0%20-12%20L3%20-5%20L10%20-8%20L7%200%20L12%203%20L4%204%20L0%2012%20L-4%204%20L-12%203%20L-7%200%20L-10%20-8%20L-3%20-5%20Z%22%20fill=%22%23e6761f%22/%3E%3Cpath%20d=%22M0%20-3%20V12%22%20stroke=%22rgba%280%2C0%2C0%2C.28%29%22%20stroke-width=%221%22/%3E%3C/g%3E%3Ccircle%20cx=%22189%22%20cy=%2223%22%20r=%223.2%22%20fill=%22%23a2531f%22/%3E%3C/svg%3E") repeat-x; background-size: 150px 40px; opacity: .85; transform-origin: 50% 0; animation: asway 7s ease-in-out infinite alternate; }
+@keyframes asway { from { transform: rotate(-.25deg) } to { transform: rotate(.25deg) } }
+.a-moon { position: absolute; right: 13vw; top: 17vh; width: clamp(90px, 9vw, 160px); aspect-ratio: 1; border-radius: 50%; opacity: .26;
+  background: radial-gradient(circle at 36% 32%, #ffe0a0, #f5a94a 62%, #d0762a); box-shadow: 0 0 64px 22px rgba(255, 164, 70, .28); }
+.d-patch { position: absolute; bottom: var(--hintH, 64px); opacity: .96; filter: drop-shadow(0 0 10px rgba(255, 150, 40, .14)); }
+.d-patch.pl { left: 0; width: clamp(250px, 26vw, 460px); }
+.d-patch.pr { right: 0; width: clamp(200px, 20vw, 340px); }
+@media (max-height: 700px) { .d-patch { opacity: .6; } .a-moon { display: none; } }
