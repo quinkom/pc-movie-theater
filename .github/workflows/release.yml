@@ -1,6 +1,7 @@
 name: Release
 # Builds the Windows installer and publishes it to a GitHub Release when you push a version tag, e.g.:
-#   git tag v1.0.1 && git push origin v1.0.1
+#   git tag v1.2.0 && git push origin v1.2.0
+# (Run manually from the Actions tab to just test the build — that does not publish anything.)
 on:
   push:
     tags: ['v*']
@@ -17,6 +18,24 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run release
+
+      # Create the release first. If electron-builder has to create it, its parallel uploads can race and
+      # leave two releases with the same tag (this happened with v1.1.0).
+      - name: Create release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: gh release create "${{ github.ref_name }}" --title "PC Movie Theater ${{ github.ref_name }}" --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish installer
+        if: startsWith(github.ref, 'refs/tags/')
+        run: npm run release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build installer (test run, not published)
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        run: npm run dist
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
