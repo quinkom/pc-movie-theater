@@ -482,19 +482,22 @@ function audioArgs() {
 
 // A second audio-only mpv plays the same soundtrack on another device and is kept locked to the main player's clock
 // (pause, seek, speed, volume, audio track and episode changes are mirrored; drift is corrected a few times a second).
-function startDual(state) {
+// onFail(reason) is called once if the second output could not be opened (device missing/busy, mpv died); the log is DATA/second-audio.log.
+function startDual(state, onFail) {
   const dev = settings.audioDevice2;
   if (!dev || dev === 'auto' || dev === settings.audioDevice) return null;
   const exe = mpvPath(); if (!exe) return null;
   const L = state.live, pipe2 = `\\\\.\\pipe\\pcmovietheater-b-${process.pid}-${Date.now()}`;
-  const d = { sT: 0, sAt: 0, sPaused: true, ready: false, lastFix: 0, stopped: false, path: state.path, sock: null, proc: null, timer: null };
+  const d = { sT: 0, sAt: 0, sPaused: true, ready: false, lastFix: 0, stopped: false, path: state.path, sock: null, proc: null, timer: null, failed: false };
   const pNow = () => L.paused ? L.t : L.t + (Date.now() - L.at) / 1000 * (L.speed || 1);
-  const send = c => { try { d.sock && d.sock.write(JSON.stringify({ command: c }) + '\n'); } catch {} };
+  const send = (c, id) => { try { d.sock && d.sock.write(JSON.stringify(id ? { command: c, request_id: id } : { command: c }) + '\n'); } catch {} };
+  const fail = why => { if (d.failed || d.stopped) return; d.failed = true; d.stop(); try { onFail && onFail(why); } catch {} };
   const args = ['--no-config', '--no-terminal', '--vid=no', '--force-window=no', '--idle=no', '--keep-open=yes', '--no-input-default-bindings', '--no-input-terminal',
+    `--log-file=${path.join(DATA, 'second-audio.log')}`, '--msg-level=all=info,ao=v',
     `--audio-device=${dev}`, `--volume=${L.volume}`, `--volume-max=${+settings.volumeMax || 130}`, '--pause=yes', `--audio-delay=${((+settings.audioDelay2 || 0) + (+settings.audioDelay || 0)) / 1000}`,
     `--alang=${settings.audioLang || ''}`, `--input-ipc-server=${pipe2}`, ...audioArgs(), `--start=${Math.max(0, L.t).toFixed(2)}`, d.path];
   d.proc = spawn(exe, args, { stdio: 'ignore' });
-  d.proc.on('exit', () => { d.stopped = true; clearInterval(d.timer); });
+  d.proc.on('exit', code => { clearInterval(d.timer); fail('player exited (code ' + code + ')'); d.stopped = true; });
   let tries = 0;
   const connect = () => {
     if (d.stopped) return;
@@ -514,8 +517,9 @@ function startDual(state) {
               send(['set_property', 'pause', !!L.paused]); d.sPaused = !!L.paused;
               if (L.aid != null) send(['set_property', 'aid', L.aid]);
               if (L.mute) send(['set_property', 'mute', true]);
+              setTimeout(() => send(['get_property', 'current-ao'], 77), 2500);   // did the audio output actually open?
             }
-          }
+          } else if (m.request_id === 77 && (m.error !== 'success' || !m.data)) fail('audio device could not be opened');
         } catch {}
       }
     });
@@ -628,7 +632,18 @@ function play(item, startFile, startPos) {
   };
   if (process.env.HS_DEBUG_SEQ) { for (const [ms, c] of [[7000, ['seek', 900, 'absolute']], [10000, ['set_property', 'pause', true]], [12500, ['set_property', 'pause', false]], [17000, ['quit']]]) setTimeout(() => mpvCommand(sock, c), ms); }   // test hook
   setTimeout(connect, 300);
-  setTimeout(() => { try { dual = startDual(state); } catch (e) { console.log('second audio output failed:', e.message); } }, 1800);
+  // Bluetooth headsets sleep when idle and can take a few seconds to wake, so retry the second output a couple of times before giving up.
+  const launchDual = (attempt = 1) => {
+    if (proc.exitCode != null) return;
+    try {
+      dual = startDual(state, why => {
+        console.log('second audio output failed (try ' + attempt + '):', why);
+        if (attempt < 3) setTimeout(() => launchDual(attempt + 1), 2500);
+        else if (sock) mpvCommand(sock, ['show-text', 'Second headphones unavailable - is it connected and set as a Windows output?', 6000]);
+      });
+    } catch (e) { console.log('second audio output failed:', e.message); }
+  };
+  setTimeout(launchDual, 1800);
   proc.on('exit', () => {
     try { sock?.destroy(); } catch {}
     try { dual && dual.stop(); } catch {}
