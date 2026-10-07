@@ -4,7 +4,15 @@
 
 <p align="center"><b>A free, open-source movie & TV library for Windows</b> — browse your collection as a shelf of 3D DVD boxes (like the old Xbox 360 dashboards), play anything with a YouTube-style player, and get seasonal themes that change with the calendar.</p>
 
-<p align="center"><img src="docs/screenshots/shelf-classic.png" alt="Cover-flow shelf, Movie Theater theme" width="900"></p>
+<p align="center">
+  <a href="https://github.com/quinkom/pc-movie-theater/releases/latest"><img src="https://img.shields.io/github/v/release/quinkom/pc-movie-theater?label=download&style=for-the-badge&color=f5c542&labelColor=3a0d12" alt="Download latest release"></a>
+  <img src="https://img.shields.io/badge/platform-Windows%2010%2F11-3a0d12?style=for-the-badge" alt="Windows 10/11">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-3a0d12?style=for-the-badge" alt="MIT license"></a>
+</p>
+
+<p align="center"><a href="https://github.com/quinkom/pc-movie-theater/releases/latest"><b>⬇ Download the installer</b></a> · <a href="#install">Install help</a> · <a href="#features">Features</a></p>
+
+<p align="center"><img src="docs/screenshots/demo.gif" alt="Browsing the cover-flow shelf" width="900"></p>
 
 ## Features
 
@@ -20,9 +28,17 @@
 - **Fully remappable** keyboard and controller bindings, for both the shelf and the player.
 - **Auto-update** — checks GitHub when you launch (if you're online) and *asks* before installing anything.
 
+### Seasonal themes
+
+They switch automatically by date (Halloween, Autumn, Winter and the default Movie Theater look), or pick one yourself.
+
+<p align="center"><img src="docs/screenshots/themes.jpg" alt="Movie Theater, Halloween, Autumn and Winter themes" width="900"></p>
+
+### Shelf, wall and filters
+
 <p align="center">
-<img src="docs/screenshots/wall-halloween.png" alt="Wall layout, Halloween theme" width="440">
-<img src="docs/screenshots/filters.png" alt="Filters panel" width="440">
+<img src="docs/screenshots/wall-halloween.jpg" alt="Wall layout, Halloween theme" width="440">
+<img src="docs/screenshots/filters.jpg" alt="Filters panel" width="440">
 </p>
 
 ## Install
