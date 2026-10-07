@@ -1,7 +1,7 @@
 {
   "name": "pc-movie-theater",
   "productName": "PC Movie Theater",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "A free, open-source movie & TV library for Windows: cover-flow DVD-box shelf, YouTube-style player (mpv), seasonal themes, Archive.org downloads, Xbox controller support.",
   "main": "main.js",
   "author": "Quinton Kom <271633497+quinkom@users.noreply.github.com>",
